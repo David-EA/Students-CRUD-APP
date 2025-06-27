@@ -29,8 +29,13 @@ const getAllStudents = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    const students = await Student.find().skip(skip).limit(limit);
-    const total = await Student.countDocuments();
+     const filter = {};
+    if (req.query.lastName) {
+      filter.lastName = req.query.lastName;
+    }
+
+    const students = await Student.find(filter).skip(skip).limit(limit);
+    const total = await Student.countDocuments(filter);
     const totalPages = Math.ceil(total / limit);
 
     return res.status(200).json({
