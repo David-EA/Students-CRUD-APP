@@ -21,6 +21,13 @@ const studentSchema = new mongoose.Schema({
         type: Number,
         required: true,
     },
+    emailToken: {
+        type: String,
+    },
+    isVerified: {
+        type: Boolean,
+        default: false
+    },
 }, {
     timestamps: true,
     versionKey: false

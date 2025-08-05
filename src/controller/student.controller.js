@@ -1,4 +1,7 @@
+const { v4: uuidv4 } = require("uuid");
+const { sendTemplateEmail, sendEmail } = require('../config/email');
 const Student = require('../models/students.schema');
+const emailTemplates = require("../templates/emailTemplates");
 
 const createStudent = async (req, res) => {
   const { firstName, lastName, email, age } = req.body;
@@ -12,9 +15,19 @@ const createStudent = async (req, res) => {
     const existingStudent = await Student.findOne({ email });
     if (existingStudent) return res.status(409).json({ message: 'Student with this email already exists' });
 
-    const newStudent = new Student({ firstName, lastName, email, age });
+   const emailToken = uuidv4();
+
+    const newStudent = new Student({ firstName, lastName, email, age, emailToken: emailToken });
 
     await newStudent.save();
+
+    const welcomeTemplate = emailTemplates.welcomeTemplate(firstName, emailToken)
+    await sendTemplateEmail(
+      email, 
+      welcomeTemplate.subject,
+      welcomeTemplate.html,
+      welcomeTemplate.text,
+    );
 
     res.status(201).json({ message: 'Student created successfully', data: newStudent });
   }
@@ -22,6 +35,37 @@ const createStudent = async (req, res) => {
     res.status(500).json({ message: 'Error creating student', error: error.message });
   }
 }
+
+const verifyEmail = async (req, res) => {
+  const token = req.params.token;
+  if (!token) {
+    return res.status(400).json({ message: "No Token" });
+  }
+
+  try {
+    const student = await Student.findOne({emailToken: token})
+    if(!student){
+      return res.status(404).json({messsage: "Student With this token doesn't Exist"})
+    }
+    student.isVerified = true;
+    student.emailToken = null;
+    await student.save();
+
+    // Send email verification success notification
+    // const successTemplate = emailTemplates.emailVerificationSuccessTemplate(user.name);
+    // await sendTemplateEmail(
+    //   student.email,
+    //   successTemplate.subject,
+    //   successTemplate.html,
+    //   successTemplate.text
+    // );
+
+    return res.status(200).json({message: "Student Verified Successfully", student})
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
 
 const getAllStudents = async (req, res) => {
   try {
@@ -79,9 +123,31 @@ const editStudent = async (req, res) => {
       if (existingStudent && existingStudent._id.toString() !== id) {
         return res.status(409).json({ message: "Student with this email already exists" });
       }
+
+      // If email is changed, mark as unverified
+      student.email = email;
+      student.isVerified = false;
+      
+      // Generate new email token for verification
+      const emailToken = uuidv4();
+      student.emailToken = emailToken;
+      
+      // Send verification email
+      // const welcomeTemplate = emailTemplates.welcomeTemplate(name || user.name, emailToken);
+      // await sendTemplateEmail(
+      //   email,
+      //   welcomeTemplate.subject,
+      //   welcomeTemplate.html,
+      //   welcomeTemplate.text
+      // );
     }
 
     await student.save();
+    await sendEmail(
+      student.email,
+      'Your Student Information has been Updated',
+      `Hello, \n\nYour student information has been updated successfully. \n\n please verify your email with this token ${emailToken}`,
+    )
     return res.status(200).json({ message: "Student Updated Successfully" });
   }
   catch (error) {
@@ -122,5 +188,6 @@ module.exports = {
   getAllStudents,
   editStudent,
   deleteStudent,
-  getStudentsCount
+  getStudentsCount,
+  verifyEmail
 };
